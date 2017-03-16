@@ -168,7 +168,7 @@ if __name__ == '__main__':
         for line in f:
             blacklist.append(line.strip())
     bot = itchat.new_instance()
-    bot.auto_login(hotReload=True, enableCmdQR=1)
+    bot.auto_login(hotReload=True, enableCmdQR=2)
     nickname = bot.loginInfo['User']['NickName']
     sc = SlackClient('xoxb-154204749857-XniRVReWwybF9Iy4EBqeaoOl')
     thread.start_new_thread(autoreply, ("AutoReply", sc, chat_log, chat_id_map, bot))
