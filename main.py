@@ -16,7 +16,7 @@ import itchat
 from itchat.content import *
 
 from slacker import Slacker
-slack = Slacker('xoxb-153223940192-BOBu8RrQOyRUDLvwfjm8QmeF')
+slack = Slacker('xoxb-153223940192-0WTC4nLukj7UoEm1iLBVZYr4')
 from slackclient import SlackClient
 channel_map = {}
 user_map = {}
@@ -170,7 +170,7 @@ if __name__ == '__main__':
     bot = itchat.new_instance()
     bot.auto_login(hotReload=True, enableCmdQR=2)
     nickname = bot.loginInfo['User']['NickName']
-    sc = SlackClient('xoxb-154204749857-XniRVReWwybF9Iy4EBqeaoOl')
+    sc = SlackClient('xoxb-154204749857-t0aHAkrCDXQLHsxTz4C4P2Sm')
     thread.start_new_thread(autoreply, ("AutoReply", sc, chat_log, chat_id_map, bot))
 
 def blacklisted(groupname):
