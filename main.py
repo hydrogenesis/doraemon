@@ -16,7 +16,9 @@ import itchat
 from itchat.content import *
 
 from slacker import Slacker
-slack = Slacker('xoxb-153223940192-0WTC4nLukj7UoEm1iLBVZYr4')
+slack = Slacker('xoxb-153223940192-gEkiKWr8A2O2o6zgyh9HKHvE')
+send_key = 'xoxb-154204749857-tjxjzkQhdOXFCcacMiw2rV14'
+alienware = False
 from slackclient import SlackClient
 channel_map = {}
 user_map = {}
@@ -168,9 +170,11 @@ if __name__ == '__main__':
         for line in f:
             blacklist.append(line.strip())
     bot = itchat.new_instance()
-    bot.auto_login(hotReload=True, enableCmdQR=2)
+    enable_qr = 2
+    if alienware: enable_qr = 1
+    bot.auto_login(hotReload=True, enableCmdQR=enable_qr)
     nickname = bot.loginInfo['User']['NickName']
-    sc = SlackClient('xoxb-154204749857-t0aHAkrCDXQLHsxTz4C4P2Sm')
+    sc = SlackClient(send_key)
     thread.start_new_thread(autoreply, ("AutoReply", sc, chat_log, chat_id_map, bot))
 
 def blacklisted(groupname):
