@@ -14,18 +14,22 @@ from xml.etree import ElementTree as ETree
 
 import itchat
 from itchat.content import *
+from answer_bot import AnswerBot
 
 from slacker import Slacker
-slack = Slacker('xoxb-153223940192-gEkiKWr8A2O2o6zgyh9HKHvE')
-send_key = 'xoxb-154204749857-tjxjzkQhdOXFCcacMiw2rV14'
+slack = Slacker('xoxb-153223940192-OCegHbEydGFiNCcjjL9menEm')
+send_key = 'xoxb-154204749857-cJqgLob3kVAZqiPNGWnLLPi2'
 alienware = False
 from slackclient import SlackClient
+answer_bot = None
 channel_map = {}
 user_map = {}
 statistics = {}
 total_chats = 0
+log_file=None
 chat_log = {}
 chat_id_map = {}
+uin_map = {}
 kChatLogMax=9
 
 def get_channel_name(sc, channel_id):
@@ -127,7 +131,7 @@ def autoreply(thread_name, sc, chat_log, chat_id_map, bot):
                             message_to_send = last_message
                             destination = last_chat[channel_name][int(message) - 1]
                             default[channel_name] = destination
-                            print json.dumps(default, indent=None).decode('unicode-escape').encode('utf8')
+                            #print json.dumps(default, indent=None).decode('unicode-escape').encode('utf8')
                             sc.rtm_send_message(channel_short_name, 'sending message "%s" to "%s"' %(message_to_send, chat_id_map[destination]))
                             #print json.dumps(chat_id_map, indent=None).decode('unicode-escape').encode('utf8')
                             #print chat_id_map[destination]
@@ -159,10 +163,15 @@ nickname = ''
 bot = None
 blacklist = []
 channel_mapping = {}
+myself_wechat = None
 
 if __name__ == '__main__':
     if not os.path.exists(data_path):
         os.mkdir(data_path)
+    if os.path.exists("uin.json"):
+        with open('uin.json') as json_data:
+            uin_map = json.load(json_data)
+    log_file = open(sys.argv[1], 'w')
     # if the QR code doesn't show correctly, you can try to change the value
     # of enableCdmQR to 1 or -1 or -2. It nothing works, you can change it to
     # enableCmdQR=True and a picture will show up.
@@ -173,8 +182,13 @@ if __name__ == '__main__':
     enable_qr = 2
     if alienware: enable_qr = 1
     bot.auto_login(hotReload=True, enableCmdQR=enable_qr)
-    nickname = bot.loginInfo['User']['NickName']
+    user = bot.loginInfo['User']
+    nickname = user['NickName']
+    # my own user id and uin
+    uin_map[user['UserName']] = user
+    myself_wechat = user
     sc = SlackClient(send_key)
+    ans_bot = AnswerBot(bot)
     thread.start_new_thread(autoreply, ("AutoReply", sc, chat_log, chat_id_map, bot))
 
 def blacklisted(groupname):
@@ -211,6 +225,10 @@ def get_sender_receiver(msg):
     if msg['FromUserName'][0:2] == '@@': # group chat
         groupchat = True
         sender = msg['ActualNickName']
+        sender_id = msg['FromUserName']
+        receiver_id = msg['ActualUserName']
+        #print sender_id, myself_wechat['UserName']
+        #print msg
         m = bot.search_chatrooms(userName=msg['FromUserName'])
         if m is not None:
             receiver = m['NickName']
@@ -291,7 +309,13 @@ def get_whole_msg(msg, download=False):
 def normal_msg(msg):
     whole_msg=get_whole_msg(msg, True)
     msg_log = print_msg(whole_msg)
+    log_file.write("%s\n" % msg_log[0])
+    log_file.flush()
     sender, receiver, sender_id, receiver_id, groupchat = get_sender_receiver(msg)
+    ans_sender = ""
+    ans_receiver = ""
+    ans_agent = ""
+    ans_command = ""
     if not blacklisted(receiver):
         if groupchat:
             if not sender_id in statistics:
@@ -307,16 +331,38 @@ def normal_msg(msg):
             while sender_id in chat_log[channel]:
                 chat_log[channel].remove(sender_id)
             chat_log[channel].append(sender_id)
+            if 'Text' in msg and type(msg['Text']) is unicode and len(msg['Text']) > 0 and msg['Text'][0] == '/':
+                ans_sender = receiver_id
+                ans_receiver = sender_id
+                ans_command = msg['Text']
+                if receiver_id in uin_map.keys():
+                    ans_agent = uin_map[receiver_id]
+                else:
+                    ans_agent = {'Uin': 'zebra'}
             #print json.dumps(statistics, indent=None).decode('unicode-escape').encode('utf8')
         else:
             channel = "#single"
+            if sender_id in uin_map.keys():
+                if 'Text' in msg and type(msg['Text']) is unicode and len(msg['Text']) > 0 and msg['Text'][0] == '/':
+                    ans_sender = sender_id
+                    if sender_id != str(myself_wechat['UserName']):
+                        ans_receiver = sender_id
+                    else:
+                        ans_receiver = receiver_id
+                    ans_command = msg['Text']
+                    ans_agent = uin_map[sender_id]
             if not channel in chat_log:
                 chat_log[channel] = []
-            if sender != "田甲":
+            if sender_id != myself_wechat['UserName']:
                 chat_id_map[sender_id] = sender
                 while sender_id in chat_log[channel]:
                     chat_log[channel].remove(sender_id)
                 chat_log[channel].append(sender_id)
+        if len(ans_command) > 0:
+            print sender_id, receiver_id, ans_sender, ans_receiver, ans_command, str(ans_agent['Uin'])
+            result = ans_bot.ParseCommands(str(ans_agent['Uin']), msg['Text'])
+            print result
+            bot.send(result, toUserName=ans_receiver)
         if len(chat_log[channel]) > kChatLogMax:
             del chat_log[channel][0]
         #print json.dumps(chat_log, indent=None).decode('unicode-escape').encode('utf8')
@@ -352,6 +398,24 @@ def note_msg(msg):
     for m in msg_send:
         bot.send(m, toUserName='filehelper')
     clear_timeouted_message()
+
+@bot.msg_register(SYSTEM)
+def get_uin(msg):
+    if msg['SystemInfo'] != 'uins': return
+    ins = bot
+    fullContact = ins.memberList + ins.chatroomList + ins.mpList
+    #print('** Uin Updated **')
+    for username in msg['Text']:
+        member = itchat.utils.search_dict_list(
+            fullContact, 'UserName', username)
+        if member == None: continue
+        uin_map[member['UserName']] = copy.deepcopy(member)
+        print(('#%d] %s: %s' % (len(uin_map.keys()),
+            member.get('NickName', ''), member['Uin']))
+            .encode(sys.stdin.encoding, 'replace'))
+    with open('uin.json', 'w') as json_data:
+        json.dump(uin_map, json_data, indent=2)
+    #print json.dumps(uin_map, indent=None).decode('unicode-escape').encode('utf8')
 
 if __name__ == '__main__':
     bot.run()
